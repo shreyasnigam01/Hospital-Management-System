@@ -20,7 +20,7 @@ load_env()
 
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_USER = os.environ.get("DB_USER", "root")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "@magin12345")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "your_password")
 DB_NAME = os.environ.get("DB_NAME", "hospital")
 
 def get_connection():
