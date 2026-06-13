@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hospital Enterprise Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <!-- Chart.js CDN for beautiful vector charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <h2>🏥 HMS Portal</h2>
+      </div>
+      <ul class="sidebar-menu">
+        <li><a onclick="showTab('dashboard')" id="menu-dashboard" class="active">📊 Financials & stats</a></li>
+        <li><a onclick="showTab('patients')" id="menu-patients">👥 Patients</a></li>
+        <li><a onclick="showTab('doctors')" id="menu-doctors">🩺 Doctors</a></li>
+        <li><a onclick="showTab('appointments')" id="menu-appointments">📅 Appointments</a></li>
+        <li><a onclick="showTab('records')" id="menu-records">📝 Medical Records</a></li>
+        <li><a onclick="showTab('billing')" id="menu-billing">💳 Billing Center</a></li>
+      </ul>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          User: <span>{{ session['username'] }}</span>
+        </div>
+        <a href="{{ url_for('logout') }}" class="btn btn-secondary btn-icon" style="text-align: center;">Logout</a>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="main-content">
+      <!-- 1. OVERVIEW & FINANCIAL DASHBOARD TAB -->
+      <section id="tab-dashboard" class="tab-content active">
+        <div class="page-header">
+          <h1>📊 Dashboard Analytics</h1>
+        </div>
+        
+        <!-- Summary metrics -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-details">
+              <h3>Invoiced Total</h3>
+              <div class="stat-val">${{ finance_stats.total_billing }}</div>
+            </div>
+            <div class="stat-icon icon-blue">💰</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-details">
+              <h3>Revenue Collected</h3>
+              <div class="stat-val" style="color: #34d399;">${{ finance_stats.total_paid }}</div>
+            </div>
+            <div class="stat-icon icon-emerald">✅</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-details">
+              <h3>Outstanding Balance</h3>
+              <div class="stat-val" style="color: #fca5a5;">${{ finance_stats.total_unpaid }}</div>
+            </div>
+            <div class="stat-icon icon-red">⚠️</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-details">
+              <h3>Appointments</h3>
+              <div class="stat-val">{{ counts.appointments }}</div>
+            </div>
+            <div class="stat-icon icon-amber">📅</div>
+          </div>
+        </div>
+
+        <!-- Financial Graphs Grid -->
+        <div class="financial-grid">
+          <div class="chart-card">
+            <h3>Revenue by Payment Status</h3>
+            <div class="chart-wrapper">
+              <canvas id="revenueStatusChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <h3>Payment Methods</h3>
+            <div class="chart-wrapper">
+              <canvas id="paymentMethodsChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. PATIENTS TAB -->
+      <section id="tab-patients" class="tab-content">
+        <div class="page-header">
+          <h1>👥 Patient Directory</h1>
+          <button class="btn btn-primary" onclick="openPatientModal()">+ Register Patient</button>
+        </div>
+        
+        <div class="table-card">
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Age</th>
+                  <th>Gender</th>
+                  <th>Blood</th>
+                  <th>City</th>
+                  <th>Contact Info</th>
+                  <th>Emergency Contact</th>
+                  <th style="text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in patients %}
+                <tr>
+                  <td>{{ p.id }}</td>
+                  <td style="font-weight: 600;">{{ p.name }}</td>
+                  <td>{{ p.age }}</td>
+                  <td>{{ p.gender or 'N/A' }}</td>
+                  <td style="color: var(--accent-hover); font-weight: 600;">{{ p.blood_group or 'N/A' }}</td>
+                  <td>{{ p.city }}</td>
+                  <td style="font-size: 13px;">
+                    📞 {{ p.phone or '-' }}<br>
+                    ✉️ {{ p.email or '-' }}
+                  </td>
+                  <td style="font-size: 13px;">
+                    👤 {{ p.emergency_contact_name or '-' }}<br>
+                    📞 {{ p.emergency_contact_phone or '-' }}
+                  </td>
+                  <td>
+                    <div class="action-buttons" style="justify-content: center;">
+                      <button class="btn btn-secondary btn-icon" onclick="openPatientModal('{{ p.id }}', '{{ p.name|escape }}', '{{ p.age }}', '{{ p.city|escape }}', '{{ p.phone or '' }}', '{{ p.email or '' }}', '{{ p.gender or '' }}', '{{ p.blood_group or '' }}', '{{ p.emergency_contact_name|escape if p.emergency_contact_name else '' }}', '{{ p.emergency_contact_phone or '' }}')">✏️ Edit</button>
+                      <button class="btn btn-danger btn-icon" onclick="deleteRecord('patient', '{{ p.id }}', '{{ p.name|escape }}')">🗑️ Delete</button>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="9"><div class="empty-state"><h4>No Patients Registered</h4></div></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. DOCTORS TAB -->
+      <section id="tab-doctors" class="tab-content">
+        <div class="page-header">
+          <h1>🩺 Medical Specialists</h1>
+          <button class="btn btn-primary" onclick="openDoctorModal()">+ Add Doctor</button>
+        </div>
+        
+        <div class="table-card">
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Specialization</th>
+                  <th>Phone</th>
+                  <th>Email</th>
+                  <th>Shift Timings</th>
+                  <th style="text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for d in doctors %}
+                <tr>
+                  <td>{{ d.id }}</td>
+                  <td style="font-weight: 600;">{{ d.name }}</td>
+                  <td><span class="badge badge-scheduled">{{ d.specialization }}</span></td>
+                  <td>{{ d.phone or '-' }}</td>
+                  <td>{{ d.email or '-' }}</td>
+                  <td style="font-weight: 500;">⏰ {{ d.shift_timings or '-' }}</td>
+                  <td>
+                    <div class="action-buttons" style="justify-content: center;">
+                      <button class="btn btn-secondary btn-icon" onclick="openDoctorModal('{{ d.id }}', '{{ d.name|escape }}', '{{ d.specialization|escape }}', '{{ d.phone or '' }}', '{{ d.email or '' }}', '{{ d.shift_timings or '' }}')">✏️ Edit</button>
+                      <button class="btn btn-danger btn-icon" onclick="deleteRecord('doctor', '{{ d.id }}', '{{ d.name|escape }}')">🗑️ Delete</button>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="7"><div class="empty-state"><h4>No Doctors Registered</h4></div></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. APPOINTMENTS TAB -->
+      <section id="tab-appointments" class="tab-content">
+        <div class="page-header">
+          <h1>📅 Appointments Scheduler</h1>
+          <button class="btn btn-primary" onclick="openAppointmentModal()">+ Book Appointment</button>
+        </div>
+        
+        <div class="table-card">
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Patient</th>
+                  <th>Doctor</th>
+                  <th>Date & Time</th>
+                  <th>Symptoms</th>
+                  <th>Status</th>
+                  <th style="text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in appointments %}
+                <tr>
+                  <td>{{ a.id }}</td>
+                  <td style="font-weight: 600;">{{ a.patient_name }}</td>
+                  <td>{{ a.doctor_name }} <span style="font-size: 12px; color: var(--text-secondary);">({{ a.doctor_specialization }})</span></td>
+                  <td>📅 {{ a.appointment_date }}</td>
+                  <td>{{ a.symptoms or 'General checkup' }}</td>
+                  <td>
+                    {% if a.status == 'Scheduled' %}
+                      <span class="badge badge-scheduled">Scheduled</span>
+                    {% elif a.status == 'Completed' %}
+                      <span class="badge badge-completed">Completed</span>
+                    {% else %}
+                      <span class="badge badge-cancelled">Cancelled</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="action-buttons" style="justify-content: center;">
+                      <button class="btn btn-secondary btn-icon" onclick="openAppointmentModal('{{ a.id }}', '{{ a.patient_id }}', '{{ a.doctor_id }}', '{{ a.appointment_date|replace(" ", "T") }}', '{{ a.status }}', '{{ a.symptoms|escape if a.symptoms else '' }}')">✏️ Edit</button>
+                      <button class="btn btn-danger btn-icon" onclick="deleteRecord('appointment', '{{ a.id }}', 'Appointment ID: {{ a.id }}')">🗑️ Cancel</button>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="7"><div class="empty-state"><h4>No Scheduled Appointments</h4></div></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. MEDICAL RECORDS TAB -->
+      <section id="tab-records" class="tab-content">
+        <div class="page-header">
+          <h1>📝 Patient Medical Records</h1>
+          <button class="btn btn-primary" onclick="openRecordModal()">+ Add Diagnosis</button>
+        </div>
+        
+        <div class="table-card">
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Patient</th>
+                  <th>Diagnosis</th>
+                  <th>Treatment Recommendation</th>
+                  <th>Prescribed Medicines</th>
+                  <th>Date Logged</th>
+                  <th style="text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in records %}
+                <tr>
+                  <td>{{ r.id }}</td>
+                  <td style="font-weight: 600;">{{ r.patient_name }}</td>
+                  <td><span class="badge badge-unpaid">{{ r.diagnosis }}</span></td>
+                  <td>{{ r.treatment or '-' }}</td>
+                  <td style="font-family: monospace; color: var(--accent-hover);">{{ r.prescription or '-' }}</td>
+                  <td>{{ r.date_recorded }}</td>
+                  <td>
+                    <div class="action-buttons" style="justify-content: center;">
+                      <button class="btn btn-secondary btn-icon" onclick="openRecordModal('{{ r.id }}', '{{ r.patient_id }}', '{{ r.diagnosis|escape }}', '{{ r.treatment|escape if r.treatment else '' }}', '{{ r.prescription|escape if r.prescription else '' }}')">✏️ Edit</button>
+                      <button class="btn btn-danger btn-icon" onclick="deleteRecord('record', '{{ r.id }}', 'Record ID: {{ r.id }}')">🗑️ Delete</button>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="7"><div class="empty-state"><h4>No Diagnosis Records Logged</h4></div></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. BILLING CENTER TAB -->
+      <section id="tab-billing" class="tab-content">
+        <div class="page-header">
+          <h1>💳 Invoice Registry</h1>
+          <button class="btn btn-primary" onclick="openBillingModal()">+ Issue Invoice</button>
+        </div>
+        
+        <div class="table-card">
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Invoice ID</th>
+                  <th>Patient Name</th>
+                  <th>Total Amount</th>
+                  <th>Paid Amount</th>
+                  <th>Due</th>
+                  <th>Method</th>
+                  <th>Status</th>
+                  <th style="text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for b in billings %}
+                <tr>
+                  <td>#{{ b.id }}</td>
+                  <td style="font-weight: 600;">{{ b.patient_name }}</td>
+                  <td>${{ b.total_amount }}</td>
+                  <td>${{ b.paid_amount }}</td>
+                  <td style="color: var(--danger-color); font-weight: 500;">
+                    ${{ (b.total_amount - b.paid_amount)|round(2) }}
+                  </td>
+                  <td><span style="text-transform: capitalize;">{{ b.payment_method or '-' }}</span></td>
+                  <td>
+                    {% if b.payment_status == 'Paid' %}
+                      <span class="badge badge-paid">Paid</span>
+                    {% elif b.payment_status == 'Partially Paid' %}
+                      <span class="badge badge-partial">Partial</span>
+                    {% else %}
+                      <span class="badge badge-unpaid">Unpaid</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="action-buttons" style="justify-content: center;">
+                      <button class="btn btn-secondary btn-icon" onclick="openBillingModal('{{ b.id }}', '{{ b.patient_id }}', '{{ b.total_amount }}', '{{ b.paid_amount }}', '{{ b.payment_status }}', '{{ b.payment_method or '' }}')">✏️ Edit</button>
+                      <button class="btn btn-danger btn-icon" onclick="deleteRecord('billing', '{{ b.id }}', 'Invoice ID: {{ b.id }}')">🗑️ Remove</button>
+                    </div>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="8"><div class="empty-state"><h4>No Billings Issued</h4></div></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- --- CRUD POPUP DIALOG MODALS --- -->
+
+  <!-- 1. Patient Modal -->
+  <div id="patientModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="patientModalTitle">Register New Patient</h3>
+        <button class="close-btn" onclick="closeModal('patientModal')">&times;</button>
+      </div>
+      <form id="patientForm" onsubmit="submitForm(event, 'patient')">
+        <input type="hidden" name="id" id="patientId">
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Full Name *</label>
+              <input type="text" name="name" id="p_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label>Age *</label>
+              <input type="number" name="age" id="p_age" class="form-control" min="1" max="150" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>City *</label>
+              <input type="text" name="city" id="p_city" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label>Gender</label>
+              <select name="gender" id="p_gender" class="form-control">
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Email Address</label>
+              <input type="email" name="email" id="p_email" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>Phone Number</label>
+              <input type="text" name="phone" id="p_phone" class="form-control">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Blood Group</label>
+            <select name="blood_group" id="p_blood" class="form-control">
+              <option value="">Unknown</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
+          </div>
+          <div class="form-row" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+            <div class="form-group">
+              <label>Emergency Contact Name</label>
+              <input type="text" name="ec_name" id="p_ec_name" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>Emergency Contact Phone</label>
+              <input type="text" name="ec_phone" id="p_ec_phone" class="form-control">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('patientModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Patient</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Doctor Modal -->
+  <div id="doctorModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="doctorModalTitle">Add New Specialist</h3>
+        <button class="close-btn" onclick="closeModal('doctorModal')">&times;</button>
+      </div>
+      <form id="doctorForm" onsubmit="submitForm(event, 'doctor')">
+        <input type="hidden" name="id" id="doctorId">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Doctor Name *</label>
+            <input type="text" name="name" id="d_name" class="form-control" required placeholder="Dr. John Smith">
+          </div>
+          <div class="form-group">
+            <label>Specialization *</label>
+            <input type="text" name="specialization" id="d_specialization" class="form-control" required placeholder="e.g. Cardiologist">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Phone Number</label>
+              <input type="text" name="phone" id="d_phone" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>Email Address</label>
+              <input type="email" name="email" id="d_email" class="form-control">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Shift Timings</label>
+            <input type="text" name="shift_timings" id="d_shift" class="form-control" placeholder="e.g. 09:00 AM - 05:00 PM">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('doctorModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Doctor</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. Appointment Modal -->
+  <div id="appointmentModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="appointmentModalTitle">Book Appointment</h3>
+        <button class="close-btn" onclick="closeModal('appointmentModal')">&times;</button>
+      </div>
+      <form id="appointmentForm" onsubmit="submitForm(event, 'appointment')">
+        <input type="hidden" name="id" id="appointmentId">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Select Patient *</label>
+            <select name="patient_id" id="a_patient" class="form-control" required>
+              <option value="">-- Choose Patient --</option>
+              {% for p in patients %}
+                <option value="{{ p.id }}">{{ p.name }} (ID: {{ p.id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Select Doctor *</label>
+            <select name="doctor_id" id="a_doctor" class="form-control" required>
+              <option value="">-- Choose Doctor --</option>
+              {% for d in doctors %}
+                <option value="{{ d.id }}">{{ d.name }} ({{ d.specialization }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Appointment Date & Time *</label>
+              <input type="datetime-local" name="appointment_date" id="a_date" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label>Appointment Status</label>
+              <select name="status" id="a_status" class="form-control">
+                <option value="Scheduled">Scheduled</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Patient Symptoms</label>
+            <textarea name="symptoms" id="a_symptoms" class="form-control" rows="3" placeholder="e.g. high fever, cough"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('appointmentModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Book Appointment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. Medical Record Modal -->
+  <div id="recordModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="recordModalTitle">Add Diagnosis Entry</h3>
+        <button class="close-btn" onclick="closeModal('recordModal')">&times;</button>
+      </div>
+      <form id="recordForm" onsubmit="submitForm(event, 'record')">
+        <input type="hidden" name="id" id="recordId">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Patient *</label>
+            <select name="patient_id" id="r_patient" class="form-control" required>
+              <option value="">-- Choose Patient --</option>
+              {% for p in patients %}
+                <option value="{{ p.id }}">{{ p.name }} (ID: {{ p.id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Diagnosis / Condition *</label>
+            <input type="text" name="diagnosis" id="r_diagnosis" class="form-control" required placeholder="e.g. Acute Gastritis">
+          </div>
+          <div class="form-group">
+            <label>Treatment Plan</label>
+            <textarea name="treatment" id="r_treatment" class="form-control" rows="3" placeholder="Recommended treatments..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Prescribed Medication</label>
+            <textarea name="prescription" id="r_prescription" class="form-control" rows="2" placeholder="Medicine, dosage, cycle..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('recordModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Entry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 5. Billing Modal -->
+  <div id="billingModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="billingModalTitle">Create Invoice</h3>
+        <button class="close-btn" onclick="closeModal('billingModal')">&times;</button>
+      </div>
+      <form id="billingForm" onsubmit="submitForm(event, 'billing')">
+        <input type="hidden" name="id" id="billingId">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Patient *</label>
+            <select name="patient_id" id="b_patient" class="form-control" required>
+              <option value="">-- Choose Patient --</option>
+              {% for p in patients %}
+                <option value="{{ p.id }}">{{ p.name }} (ID: {{ p.id }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Total Invoice Cost ($) *</label>
+              <input type="number" name="total_amount" id="b_total" class="form-control" step="0.01" min="0" required>
+            </div>
+            <div class="form-group">
+              <label>Amount Already Paid ($)</label>
+              <input type="number" name="paid_amount" id="b_paid" class="form-control" step="0.01" min="0" value="0.00">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Payment Status</label>
+              <select name="payment_status" id="b_status" class="form-control">
+                <option value="Unpaid">Unpaid</option>
+                <option value="Partially Paid">Partially Paid</option>
+                <option value="Paid">Paid</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Payment Method</label>
+              <select name="payment_method" id="b_method" class="form-control">
+                <option value="">Select Method</option>
+                <option value="Cash">Cash</option>
+                <option value="Card">Card</option>
+                <option value="Insurance">Insurance</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('billingModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Generate Invoice</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- --- JAVASCRIPT LOGIC --- -->
+  <script>
+    // Tab switching engine
+    function showTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.getElementById('tab-' + tabId).classList.add('active');
+      
+      document.querySelectorAll('.sidebar-menu a').forEach(el => el.classList.remove('active'));
+      document.getElementById('menu-' + tabId).classList.add('active');
+      
+      // Save state
+      localStorage.setItem('activeHospitalTab', tabId);
+    }
+
+    // Modal popup toggles
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+    }
+    
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+
+    // Modal populate utilities
+    function openPatientModal(id='', name='', age='', city='', phone='', email='', gender='', blood_group='', ec_name='', ec_phone='') {
+      document.getElementById('patientId').value = id;
+      document.getElementById('p_name').value = name;
+      document.getElementById('p_age').value = age;
+      document.getElementById('p_city').value = city;
+      document.getElementById('p_gender').value = gender;
+      document.getElementById('p_phone').value = phone;
+      document.getElementById('p_email').value = email;
+      document.getElementById('p_blood').value = blood_group;
+      document.getElementById('p_ec_name').value = ec_name;
+      document.getElementById('p_ec_phone').value = ec_phone;
+      
+      document.getElementById('patientModalTitle').textContent = id ? "Edit Patient Details" : "Register New Patient";
+      openModal('patientModal');
+    }
+
+    function openDoctorModal(id='', name='', specialization='', phone='', email='', shift_timings='') {
+      document.getElementById('doctorId').value = id;
+      document.getElementById('d_name').value = name;
+      document.getElementById('d_specialization').value = specialization;
+      document.getElementById('d_phone').value = phone;
+      document.getElementById('d_email').value = email;
+      document.getElementById('d_shift').value = shift_timings;
+      
+      document.getElementById('doctorModalTitle').textContent = id ? "Edit Specialist Info" : "Add New Specialist";
+      openModal('doctorModal');
+    }
+
+    function openAppointmentModal(id='', patientId='', doctorId='', date='', status='Scheduled', symptoms='') {
+      document.getElementById('appointmentId').value = id;
+      document.getElementById('a_patient').value = patientId;
+      document.getElementById('a_doctor').value = doctorId;
+      document.getElementById('a_date').value = date;
+      document.getElementById('a_status').value = status;
+      document.getElementById('a_symptoms').value = symptoms;
+      
+      document.getElementById('appointmentModalTitle').textContent = id ? "Reschedule Appointment" : "Book Appointment";
+      openModal('appointmentModal');
+    }
+
+    function openRecordModal(id='', patientId='', diagnosis='', treatment='', prescription='') {
+      document.getElementById('recordId').value = id;
+      document.getElementById('r_patient').value = patientId;
+      document.getElementById('r_diagnosis').value = diagnosis;
+      document.getElementById('r_treatment').value = treatment;
+      document.getElementById('r_prescription').value = prescription;
+      
+      document.getElementById('recordModalTitle').textContent = id ? "Modify Diagnosis Entry" : "Add Diagnosis Entry";
+      openModal('recordModal');
+    }
+
+    function openBillingModal(id='', patientId='', total='', paid='', status='Unpaid', method='') {
+      document.getElementById('billingId').value = id;
+      document.getElementById('b_patient').value = patientId;
+      document.getElementById('b_total').value = total;
+      document.getElementById('b_paid').value = paid;
+      document.getElementById('b_status').value = status;
+      document.getElementById('b_method').value = method;
+      
+      document.getElementById('billingModalTitle').textContent = id ? "Adjust Invoice Settings" : "Create Invoice";
+      openModal('billingModal');
+    }
+
+    // Submit handler
+    function submitForm(event, type) {
+      event.preventDefault();
+      const form = event.target;
+      const id = form.querySelector('input[name="id"]').value;
+      const formData = new FormData(form);
+      
+      let endpoint = '';
+      if (type === 'patient') endpoint = id ? `/edit_patient/${id}` : '/add_patient';
+      else if (type === 'doctor') endpoint = id ? `/edit_doctor/${id}` : '/add_doctor';
+      else if (type === 'appointment') endpoint = id ? `/edit_appointment/${id}` : '/add_appointment';
+      else if (type === 'record') endpoint = id ? `/edit_record/${id}` : '/add_record';
+      else if (type === 'billing') endpoint = id ? `/edit_billing/${id}` : '/add_billing';
+
+      fetch(endpoint, {
+        method: 'POST',
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          window.location.reload();
+        } else {
+          alert(data.message);
+        }
+      })
+      .catch(err => {
+        alert("Action failed. Connection error.");
+      });
+    }
+
+    // Delete handler
+    function deleteRecord(type, id, displayName) {
+      if (confirm(`Are you sure you want to delete ${displayName}?`)) {
+        let endpoint = '';
+        if (type === 'patient') endpoint = `/delete_patient/${id}`;
+        else if (type === 'doctor') endpoint = `/delete_doctor/${id}`;
+        else if (type === 'appointment') endpoint = `/delete_appointment/${id}`;
+        else if (type === 'record') endpoint = `/delete_record/${id}`;
+        else if (type === 'billing') endpoint = `/delete_billing/${id}`;
+
+        fetch(endpoint, {
+          method: 'POST'
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            window.location.reload();
+          } else {
+            alert(data.message);
+          }
+        })
+        .catch(err => {
+          alert("Deletion failed. Connection error.");
+        });
+      }
+    }
+
+    // Chart.js render configuration (Ingested from Flask data variables)
+    function initCharts() {
+      // Data injections from Python Flask
+      const rawFinanceData = {{ finance_stats|tojson }};
+      
+      // status chart (Doughnut)
+      const ctxStatus = document.getElementById('revenueStatusChart').getContext('2d');
+      new Chart(ctxStatus, {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(rawFinanceData.status_revenue),
+          datasets: [{
+            data: Object.values(rawFinanceData.status_revenue),
+            backgroundColor: [
+              '#10b981', // Paid (Emerald)
+              '#ef4444', // Unpaid (Red)
+              '#f59e0b'  // Partially Paid (Amber)
+            ],
+            borderWidth: 2,
+            borderColor: '#1c2541'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: '#8da9c4', font: { family: 'Outfit', size: 12 } }
+            }
+          }
+        }
+      });
+
+      // method chart (Bar)
+      const ctxMethods = document.getElementById('paymentMethodsChart').getContext('2d');
+      new Chart(ctxMethods, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(rawFinanceData.method_revenue),
+          datasets: [{
+            label: 'Total Billings ($)',
+            data: Object.values(rawFinanceData.method_revenue),
+            backgroundColor: '#3a86c8',
+            hoverBackgroundColor: '#4895ef',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#8da9c4', font: { family: 'Outfit' } } },
+            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8da9c4', font: { family: 'Outfit' } } }
+          }
+        }
+      });
+    }
+
+    // Window load settings
+    window.onload = function() {
+      const savedTab = localStorage.getItem('activeHospitalTab') || 'dashboard';
+      showTab(savedTab);
+      
+      initCharts();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Database configurations (contains personal MySQL passwords)
+.env
+
+# Python caching
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
